@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import json
 import sys
 import os
+from utils.places_helper import THEME_TO_PLACE_TYPE
 
 # 프로젝트 루트 디렉토리를 Python 경로에 추가
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -116,7 +117,7 @@ def main():
         
         # 4. 여행 테마 선택
         st.subheader("4. 여행 테마를 선택해주세요")
-        themes = ["문화/역사", "자연/아웃도어", "음식/맛집", "쇼핑", "휴양/힐링"]
+        themes = list(THEME_TO_PLACE_TYPE.keys())  # 매핑에서 키들을 가져와서 테마 리스트로 사용
         selected_themes = st.multiselect(
             "관심있는 테마를 선택해주세요 (최대 3개)",
             themes,
@@ -192,11 +193,13 @@ def main():
                                         st.image(photo_url, width=300)
                                 
                                 # 가격 수준 표시
-                                price_level = place.get("price_level", 0)
-                                st.write(f"가격 수준: {'💰' * price_level if price_level else 'N/A'}")
+                                price_level = place.get("price_level", None)
+                                price_text = "💰" * price_level if price_level else "가격 수준 확인 불가"
+                                st.write(f"가격 수준: {price_text}")
                                 
                                 # 상세 정보 버튼
-                                if st.button(f"상세 정보 보기##{place['place_id']}", key=place['place_id']):
+                                # place_id는 key로만 사용하고 텍스트에서는 제외
+                                if st.button("상세 정보 보기", key=f"details_{place['place_id']}"):
                                     details = get_place_details(place['place_id'])
                                     if details:
                                         st.write("---")
@@ -213,6 +216,8 @@ def main():
                             with col2:
                                 st.write(f"유형: {place['place_type']}")
                                 st.write(f"평가: {place.get('user_ratings_total', 0)}개")
+                                st.write(f"위도: {place['location']['lat']:.5f}")
+                                st.write(f"경도: {place['location']['lng']:.5f}")
                 else:
                     st.warning("검색된 관광지가 없습니다. 다른 테마를 선택해보세요.")
 

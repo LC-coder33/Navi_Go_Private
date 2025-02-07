@@ -8,11 +8,14 @@ from config import GOOGLE_CLOUD_API_KEY
 
 # Places API 타입으로 매핑
 THEME_TO_PLACE_TYPE = {
-    "문화/역사": ["museum", "art_gallery", "church", "hindu_temple", "mosque", "synagogue", "tourist_attraction"],
-    "자연/아웃도어": ["park", "natural_feature", "campground", "beach"],
-    "음식/맛집": ["restaurant", "cafe", "bar"],
-    "쇼핑": ["shopping_mall", "department_store", "market"],
-    "휴양/힐링": ["spa", "beauty_salon", "amusement_park", "zoo"]
+    "박물관": ["museum"],
+    "미술관": ["art_gallery"],
+    "문화/역사": ["church", "hindu_temple", "mosque", "synagogue", "palace", "historic_site", "archaeological_site", "monument"],
+    "관광명소": ["tourist_attraction", "point_of_interest", "landmark", "city_hall", "courthouse", "embassy", "town_square"],
+    "자연/아웃도어": ["park", "natural_feature", "campground", "beach", "rv_park", "picnic_ground", "waterfall", "pier", "marina"],
+    "음식/맛집": ["restaurant", "cafe", "bar", "bakery", "meal_takeaway", "meal_delivery", "ice_cream_shop", "night_club"],
+    "쇼핑": ["shopping_mall", "department_store", "market", "jewelry_store", "shoe_store", "clothing_store", "book_store", "electronics_store", "convenience_store", "supermarket"],
+    "휴양/힐링": ["spa", "beauty_salon", "amusement_park", "zoo", "hot_spring", "hair_care", "massage", "gym"]
 }
 
 def get_nearby_places(location: Dict[str, float], selected_themes: List[str], 
