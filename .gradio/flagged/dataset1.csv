@@ -1,0 +1,2 @@
+지역 선택,시작 날짜 (YYYY-MM-DD),종료 날짜 (YYYY-MM-DD),동행인 (쉼표로 구분),반려동물 동반,예산 (만원),테마/관심사,여행 계획 결과,timestamp
+인천,2025-02-05,2024-02-08,친구 1명,false,100,축제/공연/행사,"{""area"": ""\uc778\ucc9c"", ""period"": ""2025-02-05 ~ 2024-02-08"", ""companions"": [""\uce5c\uad6c 1\uba85""], ""has_pet"": false, ""budget"": 100, ""theme"": ""\ucd95\uc81c/\uacf5\uc5f0/\ud589\uc0ac"", ""recommendations"": {}, ""error"": ""Expecting value: line 1 column 1 (char 0)""}",2025-02-05 14:56:30.648702
