@@ -1,8 +1,8 @@
 import requests
 from typing import List, Dict, Optional
+import time
 import sys
 import os
-import math
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import GOOGLE_CLOUD_API_KEY
 
@@ -18,66 +18,128 @@ THEME_TO_PLACE_TYPE = {
     "휴양/힐링": ["spa", "beauty_salon", "amusement_park", "zoo", "hot_spring", "hair_care", "massage", "gym"]
 }
 
-def get_nearby_places(location: Dict[str, float], selected_themes: List[str], 
-                     radius: int = 5000) -> List[Dict]:
+def calculate_city_radius(location: Dict[str, float]) -> int:
+    """
+    도시의 viewport 정보를 기반으로 적절한 검색 반경을 계산
+    """
+    base_url = "https://maps.googleapis.com/maps/api/geocode/json"
+    params = {
+        "latlng": f"{location['lat']},{location['lng']}",
+        "key": GOOGLE_CLOUD_API_KEY
+    }
+    
+    try:
+        response = requests.get(base_url, params=params)
+        data = response.json()
+        
+        if data.get("results"):
+            # 도시 정보를 찾기 위해 결과를 순회
+            for result in data["results"]:
+                if "locality" in result["types"]:
+                    viewport = result["geometry"]["viewport"]
+                    ne = viewport["northeast"]
+                    sw = viewport["southwest"]
+                    
+                    # 위도/경도 차이를 km로 변환하여 대략적인 도시 크기 계산
+                    lat_diff = abs(ne["lat"] - sw["lat"])
+                    lng_diff = abs(ne["lng"] - sw["lng"])
+                    
+                    # 도시의 대각선 길이를 기준으로 반경 결정
+                    city_size = (lat_diff ** 2 + lng_diff ** 2) ** 0.5
+                    
+                    if city_size > 0.5:  # 대도시 (예: 뉴욕, 도쿄)
+                        return 50000
+                    elif city_size > 0.2:  # 중간 크기 도시
+                        return 30000
+                    else:  # 작은 도시
+                        return 15000
+    except Exception as e:
+        print(f"Error calculating city radius: {str(e)}")
+    
+    return 30000  # 기본값으로 30km 반환
+
+def get_nearby_places(location: Dict[str, float], selected_themes: List[str]) -> List[Dict]:
     """
     선택된 위치 주변의 관광지를 검색합니다.
-    
-    Args:
-        location (Dict[str, float]): 위도/경도 좌표
-        selected_themes (List[str]): 선택된 여행 테마 리스트
-        radius (int): 검색 반경 (미터)
-    
-    Returns:
-        List[Dict]: 검색된 장소 목록
+    동적 반경 조정과 결과 수에 따른 최적화를 포함합니다.
     """
+    # 도시 크기에 따른 초기 검색 반경 계산
+    initial_radius = calculate_city_radius(location)
+    print(f"Initial search radius: {initial_radius}m")
+    
     # 선택된 테마에 해당하는 place type들을 모두 가져옴
     place_types = []
     for theme in selected_themes:
         place_types.extend(THEME_TO_PLACE_TYPE.get(theme, []))
     
     all_places = []
+    current_radius = initial_radius
     
     for place_type in place_types:
-        base_url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-        params = {
-            "location": f"{location['lat']},{location['lng']}",
-            "radius": radius,
-            "type": place_type,
-            "language": "ko",
-            "key": GOOGLE_CLOUD_API_KEY
-        }
+        results = []
+        next_page_token = None
         
-        try:
-            response = requests.get(base_url, params=params)
-            response.raise_for_status()
-            results = response.json().get("results", [])
+        while True:
+            base_url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+            params = {
+                "location": f"{location['lat']},{location['lng']}",
+                "radius": current_radius,
+                "type": place_type,
+                "language": "ko",
+                "key": GOOGLE_CLOUD_API_KEY
+            }
             
-            # 중복 제거를 위해 place_id를 키로 사용
-            for place in results:
-                place_details = {
-                    "place_id": place["place_id"],
-                    "name": place["name"],
-                    "location": place["geometry"]["location"],
-                    "rating": place.get("rating", 0),
-                    "user_ratings_total": place.get("user_ratings_total", 0),
-                    "types": place["types"],
-                    "place_type": place_type  # 원본 검색 타입 저장
-                }
+            if next_page_token:
+                params["pagetoken"] = next_page_token
+            
+            try:
+                response = requests.get(base_url, params=params)
+                response.raise_for_status()
+                data = response.json()
                 
-                # 사진 참조 ID가 있는 경우 추가
-                if "photos" in place:
-                    place_details["photo_reference"] = place["photos"][0]["photo_reference"]
+                # 결과 처리
+                batch_results = data.get("results", [])
+                results.extend(batch_results)
                 
-                # 가격 수준이 있는 경우 추가 (1~4, 낮은 것부터)
-                if "price_level" in place:
-                    place_details["price_level"] = place["price_level"]
+                # 다음 페이지 토큰 확인
+                next_page_token = data.get("next_page_token")
                 
-                all_places.append(place_details)
+                # 결과가 너무 많으면 반경 줄이기
+                if len(results) >= 60 and not next_page_token:
+                    current_radius = int(current_radius * 0.6)  # 40% 감소
+                    print(f"Too many results, reducing radius to {current_radius}m")
+                    results = results[:60]  # 최대 60개로 제한
+                    break
                 
-        except Exception as e:
-            print(f"Error fetching places for type {place_type}: {str(e)}")
-            continue
+                if not next_page_token:
+                    break
+                
+                # API 제한을 위한 대기
+                time.sleep(2)
+                
+            except Exception as e:
+                print(f"Error fetching places for type {place_type}: {str(e)}")
+                break
+        
+        # 결과 처리 및 중복 제거를 위한 정보 저장
+        for place in results:
+            place_details = {
+                "place_id": place["place_id"],
+                "name": place["name"],
+                "location": place["geometry"]["location"],
+                "rating": place.get("rating", 0),
+                "user_ratings_total": place.get("user_ratings_total", 0),
+                "types": place["types"],
+                "place_type": place_type
+            }
+            
+            if "photos" in place:
+                place_details["photo_reference"] = place["photos"][0]["photo_reference"]
+            
+            if "price_level" in place:
+                place_details["price_level"] = place["price_level"]
+            
+            all_places.append(place_details)
     
     # 중복 제거
     unique_places = {place["place_id"]: place for place in all_places}
@@ -86,49 +148,25 @@ def get_nearby_places(location: Dict[str, float], selected_themes: List[str],
         rating = place.get("rating", 0)
         reviews = place.get("user_ratings_total", 0)
         
-        # 필터링 조건 강화 (리뷰 100개 미만 & 평점 4.0 미만 제외)
         if reviews < 100 or rating < 4.0:
-            return -1  # 제외 대상
+            return -1
         
-        # 리뷰 수 가중치 계산 (0~1 정규화)
-        max_reviews = 5000  # 최대 리뷰 수 기준
+        max_reviews = 5000
         review_weight = min(reviews / max_reviews, 1.0)
-        
-        # 평점 가중치 (5점 만점 기준)
         rating_weight = rating / 5
         
-        # 최종 점수 (리뷰 수 60%, 평점 40% 가중치)
         score = (review_weight * 0.6 + rating_weight * 0.4) * 100
-        
         return round(score, 1)
-
-    # 중복 제거
-    unique_places = {place["place_id"]: place for place in all_places}
-
-    # 필터링 적용
-    filtered_places = []
-    for place in unique_places.values():
-        if calculate_score(place) != -1:
-            filtered_places.append(place)
-
-    # 점수 기준 정렬
-    sorted_places = sorted(
-        filtered_places,
-        key=lambda x: calculate_score(x),
-        reverse=True
-    )
-
+    
+    # 필터링 및 정렬
+    filtered_places = [place for place in unique_places.values() if calculate_score(place) != -1]
+    sorted_places = sorted(filtered_places, key=calculate_score, reverse=True)
+    
     return sorted_places[:50]  # 상위 50개만 반환
 
 def get_place_details(place_id: str) -> Optional[Dict]:
     """
     특정 장소의 상세 정보를 가져옵니다.
-    
-    Args:
-        place_id (str): Google Places place_id
-    
-    Returns:
-        Optional[Dict]: 장소 상세 정보
     """
     base_url = "https://maps.googleapis.com/maps/api/place/details/json"
     params = {
@@ -143,7 +181,6 @@ def get_place_details(place_id: str) -> Optional[Dict]:
         response.raise_for_status()
         result = response.json().get("result", {})
         
-        # 필요한 정보만 추출하여 반환
         return {
             "name": result.get("name"),
             "address": result.get("formatted_address"),
@@ -173,13 +210,6 @@ def get_place_details(place_id: str) -> Optional[Dict]:
 def get_place_photo(photo_reference: str, max_width: int = 400) -> Optional[str]:
     """
     장소 사진의 URL을 가져옵니다.
-    
-    Args:
-        photo_reference (str): 사진 참조 ID
-        max_width (int): 최대 이미지 너비
-    
-    Returns:
-        Optional[str]: 사진 URL
     """
     base_url = "https://maps.googleapis.com/maps/api/place/photo"
     params = {
