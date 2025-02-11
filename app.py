@@ -266,9 +266,99 @@ def main():
                                     st.map(map_data)
             else:
                 st.error("호텔을 찾을 수 없습니다. 다시 시도해주세요.")
+                
+        # 7. 음식점 검색 섹션 추가
+        st.subheader("7. 주변 음식점 검색")
+        if st.checkbox("음식점 검색하기"):
+            with st.spinner("주변 음식점을 검색중입니다..."):
+                # 음식/맛집 테마의 place type들만 사용
+                food_places = get_nearby_places(
+                    st.session_state.selected_place["location"], 
+                    ["음식/맛집"]  # THEME_TO_PLACE_TYPE에서 음식/맛집 테마만 선택
+                )
+                
+                if food_places:
+                    st.success(f"🍽️ {len(food_places)}개의 음식점을 찾았습니다!")
+                    
+                    # 정렬 옵션
+                    sort_option = st.selectbox(
+                        "정렬 기준",
+                        ["추천순", "리뷰 많은순", "평점 높은순"],
+                        key="food_sort"
+                    )
+                    
+                    # 필터 옵션
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        min_rating = st.slider("최소 평점", 3.5, 5.0, 3.5, 0.1, key="food_rating")
+                    with col2:
+                        min_reviews = st.slider("최소 리뷰 수", 0, 1000, 50, 50, key="food_reviews")
+                    
+                    # 필터링
+                    filtered_places = [
+                        p for p in food_places 
+                        if float(p.get('rating', 0)) >= min_rating and 
+                        int(p.get('user_ratings_total', 0)) >= min_reviews
+                    ]
+                    
+                    # 정렬
+                    if sort_option == "리뷰 많은순":
+                        filtered_places.sort(key=lambda x: int(x.get('user_ratings_total', 0)), reverse=True)
+                    elif sort_option == "평점 높은순":
+                        filtered_places.sort(key=lambda x: float(x.get('rating', 0)), reverse=True)
+                    
+                    if not filtered_places:
+                        st.warning("선택한 필터 조건에 맞는 음식점이 없습니다. 조건을 완화해보세요.")
+                    else:
+                        # 음식점 목록 표시
+                        for place in filtered_places[:30]:  # 상위 30개만 표시
+                            with st.expander(f"🍽️ {place['name']} ({place.get('rating', 'N/A')}⭐)"):
+                                col1, col2 = st.columns([2, 1])
+                                
+                                with col1:
+                                    # 음식점 사진
+                                    if "photo_reference" in place:
+                                        photo_url = get_place_photo(place["photo_reference"])
+                                        if photo_url:
+                                            st.image(photo_url, width=300)
+                                    
+                                    # 상세 정보 가져오기
+                                    details = get_place_details(place['place_id'])
+                                    if details:
+                                        st.write("---")
+                                        st.write(f"📍 주소: {details['address']}")
+                                        if details.get('phone'):
+                                            st.write(f"📞 전화번호: {details['phone']}")
+                                        if details['opening_hours']:
+                                            st.write("⏰ 영업시간:")
+                                            for hours in details['opening_hours']:
+                                                st.write(f"- {hours}")
+                                        
+                                        # 가격 수준
+                                        price_level = details.get('price_level', None)
+                                        if price_level:
+                                            st.write(f"💰 가격 수준: {'💰' * price_level}")
+                                        
+                                        # 리뷰
+                                        if details['reviews']:
+                                            st.write("💬 추천 리뷰:")
+                                            for review in details['reviews']:
+                                                st.markdown(f"""
+                                                > ⭐ {review['rating']} - {review['text']}  
+                                                > *{review['time']}*
+                                                ---
+                                                """)
+                                
+                                with col2:
+                                    st.write(f"⭐ 평점: {place.get('rating', 'N/A')} / 5.0")
+                                    st.write(f"👥 리뷰 수: {place.get('user_ratings_total', 0)}개")
+                                    if details and details.get('website'):
+                                        st.markdown(f"🌐 [웹사이트]({details['website']})")
+                else:
+                    st.warning("검색된 음식점이 없습니다. 다시 시도해주세요.")
         
-        # 7. 관광지 검색
-        st.subheader("7. 주변 관광지 검색")
+        # 8. 관광지 검색
+        st.subheader("8. 주변 관광지 검색")
         if st.button("관광지 검색하기", type="primary"):
             if not selected_themes:
                 st.warning("최소 하나의 여행 테마를 선택해주세요.")
@@ -316,6 +406,8 @@ def main():
                                 st.write(f"경도: {place['location']['lng']:.5f}")
                 else:
                     st.warning("검색된 관광지가 없습니다. 다른 테마를 선택해보세요.")
+            
+            
 
 if __name__ == "__main__":
     main()
