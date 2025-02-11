@@ -10,10 +10,10 @@ from config import GOOGLE_CLOUD_API_KEY
 THEME_TO_PLACE_TYPE = {
     "박물관": ["museum"],
     "미술관": ["art_gallery"],
-    "문화/역사": ["church", "hindu_temple", "mosque", "synagogue", "palace", "historic_site", "archaeological_site"],
+    "문화/역사": ["historic_site", "archaeological_site"],
     "관광명소": ["tourist_attraction", "landmark", "city_hall", "courthouse", "embassy", "town_square"],
     "자연/아웃도어": ["park", "natural_feature", "campground", "beach", "rv_park", "picnic_ground", "waterfall", "pier", "marina"],
-    "음식/맛집": ["restaurant", "cafe", "bar", "bakery", "meal_takeaway", "meal_delivery", "ice_cream_shop", "night_club"],
+    "음식/맛집": ["restaurant", "cafe", "bar", "bakery", "meal_takeaway", "meal_delivery", "ice_cream_shop"],
     "쇼핑": ["shopping_mall", "department_store", "market", "jewelry_store", "shoe_store", "clothing_store", "book_store", "electronics_store", "convenience_store", "supermarket"],
     "휴양/힐링": ["spa", "beauty_salon", "amusement_park", "zoo", "hot_spring", "hair_care", "massage", "gym"]
 }

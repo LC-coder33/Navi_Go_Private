@@ -11,7 +11,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config import GOOGLE_CLOUD_API_KEY
 from utils.places_helper import get_nearby_places, get_place_details, get_place_photo, THEME_TO_PLACE_TYPE
 from utils.hotels_helper import HotelsHelper
-from utils.directions_helper import ImprovedDirectionsHelper
 
 def initialize_session_state():
     if 'selected_place' not in st.session_state:
@@ -77,10 +76,6 @@ def get_place_location(place_id):
 
 def main():
     st.title("여행 계획 도우미 🌎")
-    initialize_session_state()
-    
-    # HotelsHelper 인스턴스 생성
-    hotels_helper = HotelsHelper()
     
     # 1. 여행지 선택
     st.subheader("1. 여행지를 선택해주세요")
@@ -93,8 +88,7 @@ def main():
             selected_index = st.selectbox(
                 "추천 장소 목록",
                 range(len(descriptions)),
-                format_func=lambda x: descriptions[x],
-                key="place_select"
+                format_func=lambda x: descriptions[x]
             )
             
             if selected_index is not None:
@@ -105,27 +99,28 @@ def main():
                         st.session_state.selected_place = place_location
                         st.success(f"선택된 여행지: {place_location['name']}")
     
-    if st.session_state.selected_place:
+    if 'selected_place' in st.session_state:
         # 2. 여행 날짜 선택
         st.subheader("2. 여행 날짜를 선택해주세요")
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input(
-                "출발일",
-                min_value=datetime.now().date(),
-                value=datetime.now().date() + timedelta(days=7)
-            )
+            start_date = st.date_input("출발일")
         with col2:
+            # 출발일로부터 최대 14일까지만 선택 가능
+            max_end_date = start_date + timedelta(days=14)
             end_date = st.date_input(
                 "도착일",
                 min_value=start_date,
-                value=start_date + timedelta(days=2)
+                max_value=max_end_date,
+                value=min(start_date + timedelta(days=2), max_end_date)
             )
-        if start_date and end_date:
-            st.session_state.travel_dates = [
-                start_date + timedelta(days=x)
-                for x in range((end_date - start_date).days + 1)
-            ]
+
+        # 선택된 기간이 14일을 초과하는 경우 경고 메시지 표시
+        duration = (end_date - start_date).days
+        if duration > 14:
+            st.warning("여행 기간은 최대 14일까지만 선택 가능합니다.")
+        elif duration > 0:
+            st.info(f"선택된 여행 기간: {duration}일")
         
         # 3. 예산 입력
         st.subheader("3. 예산을 입력해주세요")
@@ -156,86 +151,76 @@ def main():
             )
         with col2:
             if travel_with != "혼자":
-                num_travelers = st.number_input(
-                    "동행자 수",
-                    min_value=2,
-                    max_value=10,
-                    value=2
-                )
+                num_travelers = st.number_input("동행자 수", min_value=2, max_value=10, value=2)
             else:
                 num_travelers = 1
         
         # 6. 호텔 검색
         st.subheader("6. 주변 호텔 검색")
-                
-        if st.button("호텔 검색하기", type="primary"):
+        if st.checkbox("호텔 검색하기"):
             with st.spinner("호텔을 검색중입니다..."):
+                hotels_helper = HotelsHelper()
                 hotels = hotels_helper.search_hotels(
                     location=st.session_state.selected_place["location"]
                 )
+            
+            if hotels:
+                st.success(f"🏨 {len(hotels)}개의 호텔을 찾았습니다!")
                 
-                if hotels:
-                    st.success(f"🏨 {len(hotels)}개의 호텔을 찾았습니다!")
-                    
-                    # 정렬 옵션
-                    sort_option = st.selectbox(
-                        "정렬 기준",
-                        ["추천순", "리뷰 많은순", "평점 높은순", "거리순", "가격 낮은순"]
-                    )
-                    
-                    # 필터 옵션
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        min_rating = st.slider("최소 평점", 3.5, 5.0, 3.5, 0.1)
-                    with col2:
-                        min_reviews = st.slider("최소 리뷰 수", 0, 1000, 100, 50)
-                    with col3:
-                        max_price_level = st.slider("최대 가격 수준", 1, 4, 4, 1)
-                    
-                    # 정렬 및 필터링
-                    filtered_hotels = [
-                        h for h in hotels 
-                        if float(h.get('rating', 0)) >= min_rating and 
-                        int(h.get('review_count', 0)) >= min_reviews and
-                        int(h.get('price_level', 0)) <= max_price_level
-                    ]
-                    
-                    if sort_option == "리뷰 많은순":
-                        filtered_hotels.sort(key=lambda x: int(x.get('review_count', 0)), reverse=True)
-                    elif sort_option == "평점 높은순":
-                        filtered_hotels.sort(key=lambda x: float(x.get('rating', 0)), reverse=True)
-                    elif sort_option == "거리순":
-                        filtered_hotels.sort(key=lambda x: float(x.get('distance', 0)))
-                    elif sort_option == "가격 낮은순":
-                        filtered_hotels.sort(key=lambda x: int(x.get('price_level', 0)))
-                    else:  # 추천순
-                        filtered_hotels.sort(key=lambda x: float(x.get('relevance_score', 0)), reverse=True)
-                    
-                    if not filtered_hotels:
-                        st.warning("선택한 필터 조건에 맞는 호텔이 없습니다. 조건을 완화해보세요.")
-                        return
-                    
-                    # 호텔 표시
+                # 정렬 옵션
+                sort_option = st.selectbox(
+                    "정렬 기준",
+                    ["추천순", "리뷰 많은순", "평점 높은순", "거리순", "가격 낮은순"]
+                )
+                
+                # 필터 옵션
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    min_rating = st.slider("최소 평점", 3.5, 5.0, 3.5, 0.1)
+                with col2:
+                    min_reviews = st.slider("최소 리뷰 수", 0, 1000, 100, 50)
+                with col3:
+                    max_price_level = st.slider("최대 가격 수준", 1, 4, 4, 1)
+                
+                # 필터링
+                filtered_hotels = [
+                    h for h in hotels 
+                    if float(h.get('rating', 0)) >= min_rating and 
+                    int(h.get('review_count', 0)) >= min_reviews and
+                    int(h.get('price_level', 0)) <= max_price_level
+                ]
+                
+                # 정렬
+                if sort_option == "리뷰 많은순":
+                    filtered_hotels.sort(key=lambda x: int(x.get('review_count', 0)), reverse=True)
+                elif sort_option == "평점 높은순":
+                    filtered_hotels.sort(key=lambda x: float(x.get('rating', 0)), reverse=True)
+                elif sort_option == "거리순":
+                    filtered_hotels.sort(key=lambda x: float(x.get('distance', 0)))
+                elif sort_option == "가격 낮은순":
+                    filtered_hotels.sort(key=lambda x: int(x.get('price_level', 0)))
+                else:  # 추천순
+                    filtered_hotels.sort(key=lambda x: float(x.get('relevance_score', 0)), reverse=True)
+                
+                if not filtered_hotels:
+                    st.warning("선택한 필터 조건에 맞는 호텔이 없습니다. 조건을 완화해보세요.")
+                else:
+                    # 호텔 목록 표시
                     for hotel in filtered_hotels[:5]:
-                        with st.expander(
-                            f"🏨 {hotel['name']} ({hotel.get('rating', 'N/A')}⭐ • {hotel.get('review_count', 0)}개 리뷰)"
-                        ):
-                            cols = st.columns([2, 1])
+                        with st.expander(f"🏨 {hotel['name']} ({hotel.get('rating', 'N/A')}⭐ • {hotel.get('review_count', 0)}개 리뷰)"):
+                            col_left, col_right = st.columns([2, 1])
                             
-                            with cols[0]:
-                                # 호텔 사진 표시
+                            with col_left:
+                                # 호텔 사진
                                 if hotel.get('photos'):
                                     photo_ref = hotel['photos'][0].get('photo_reference')
                                     if photo_ref:
                                         photo_url = hotels_helper.get_hotel_photo(photo_ref)
                                         if photo_url:
-                                            st.image(photo_url, width=400)
-                                
-                                # 가격 수준 표시
-                                price_level = hotel.get('price_level', 0)
-                                st.write(f"💰 가격 수준: {'💰' * price_level}")
+                                            st.image(photo_url, use_container_width=True)
                                 
                                 # 기본 정보
+                                st.write(f"💰 가격 수준: {'💰' * hotel.get('price_level', 0)}")
                                 st.markdown(f"""
                                 📍 **주소**: {hotel.get('address', 'N/A')}  
                                 📞 **전화**: {hotel.get('phone', 'N/A')}  
@@ -257,17 +242,21 @@ def main():
                                         st.markdown(f"""
                                         > ⭐ {review.get('rating', 'N/A')} - {review.get('text', '')}  
                                         > *{review.get('relative_time_description', '')}*
+                                        ---
                                         """)
                                 
-                                # 예약 링크
-                                st.write("🔗 **링크:**")
-                                if hotel.get('website'):
-                                    st.markdown(f"[호텔 웹사이트]({hotel['website']})")
-                                if hotel.get('maps_url'):
-                                    st.markdown(f"[Google Maps]({hotel['maps_url']})")
+                                # 링크
+                                st.write("🔗 **바로가기:**")
+                                cols = st.columns(2)
+                                with cols[0]:
+                                    if hotel.get('website'):
+                                        st.markdown(f"[호텔 웹사이트]({hotel['website']})")
+                                with cols[1]:
+                                    if hotel.get('maps_url'):
+                                        st.markdown(f"[Google Maps]({hotel['maps_url']})")
                             
-                            with cols[1]:
-                                # 지도 표시
+                            with col_right:
+                                # 지도
                                 location = hotel.get('location', None)
                                 if location:
                                     map_data = pd.DataFrame({
@@ -275,9 +264,8 @@ def main():
                                         'lon': [location['lng']]
                                     })
                                     st.map(map_data)
-                
-                else:
-                    st.error("호텔 검색 중 오류가 발생했습니다. 다시 시도해주세요.")
+            else:
+                st.error("호텔을 찾을 수 없습니다. 다시 시도해주세요.")
         
         # 7. 관광지 검색
         st.subheader("7. 주변 관광지 검색")
@@ -305,24 +293,21 @@ def main():
                                     photo_url = get_place_photo(place["photo_reference"])
                                     if photo_url:
                                         st.image(photo_url, width=300)
-                                
+                                details = get_place_details(place['place_id'])
+                                if details:
+                                    st.write("---")
+                                    st.write(f"📍 주소: {details['address']}")
+                                    if details['opening_hours']:
+                                        st.write("⏰ 영업시간:")
+                                        for hours in details['opening_hours']:
+                                            st.write(hours)
+                                    if details['reviews']:
+                                        st.write("💬 리뷰:")
+                                        for review in details['reviews']:
+                                            st.write(f"- {review['text'][:100]}... ({review['rating']}⭐)")
                                 price_level = place.get("price_level", None)
                                 price_text = "💰" * price_level if price_level else "가격 수준 확인 불가"
                                 st.write(f"가격 수준: {price_text}")
-                                
-                                if st.button("상세 정보 보기", key=f"details_{place['place_id']}"):
-                                    details = get_place_details(place['place_id'])
-                                    if details:
-                                        st.write("---")
-                                        st.write(f"📍 주소: {details['address']}")
-                                        if details['opening_hours']:
-                                            st.write("⏰ 영업시간:")
-                                            for hours in details['opening_hours']:
-                                                st.write(hours)
-                                        if details['reviews']:
-                                            st.write("💬 리뷰:")
-                                            for review in details['reviews']:
-                                                st.write(f"- {review['text'][:100]}... ({review['rating']}⭐)")
                             
                             with col2:
                                 st.write(f"유형: {place['place_type']}")
