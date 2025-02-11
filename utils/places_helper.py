@@ -10,8 +10,8 @@ from config import GOOGLE_CLOUD_API_KEY
 THEME_TO_PLACE_TYPE = {
     "박물관": ["museum"],
     "미술관": ["art_gallery"],
-    "문화/역사": ["church", "hindu_temple", "mosque", "synagogue", "palace", "historic_site", "archaeological_site", "monument"],
-    "관광명소": ["tourist_attraction", "point_of_interest", "landmark", "city_hall", "courthouse", "embassy", "town_square"],
+    "문화/역사": ["church", "hindu_temple", "mosque", "synagogue", "palace", "historic_site", "archaeological_site"],
+    "관광명소": ["tourist_attraction", "landmark", "city_hall", "courthouse", "embassy", "town_square"],
     "자연/아웃도어": ["park", "natural_feature", "campground", "beach", "rv_park", "picnic_ground", "waterfall", "pier", "marina"],
     "음식/맛집": ["restaurant", "cafe", "bar", "bakery", "meal_takeaway", "meal_delivery", "ice_cream_shop", "night_club"],
     "쇼핑": ["shopping_mall", "department_store", "market", "jewelry_store", "shoe_store", "clothing_store", "book_store", "electronics_store", "convenience_store", "supermarket"],
@@ -106,7 +106,7 @@ def get_nearby_places(location: Dict[str, float], selected_themes: List[str]) ->
                 
                 # 결과가 너무 많으면 반경 줄이기
                 if len(results) >= 60 and not next_page_token:
-                    current_radius = int(current_radius * 0.6)  # 40% 감소
+                    current_radius = int(current_radius * 0.8)  # 40% 감소
                     print(f"Too many results, reducing radius to {current_radius}m")
                     results = results[:60]  # 최대 60개로 제한
                     break

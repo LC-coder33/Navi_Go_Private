@@ -11,12 +11,21 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config import GOOGLE_CLOUD_API_KEY
 from utils.places_helper import get_nearby_places, get_place_details, get_place_photo, THEME_TO_PLACE_TYPE
 from utils.hotels_helper import HotelsHelper
+from utils.directions_helper import ImprovedDirectionsHelper
 
 def initialize_session_state():
     if 'selected_place' not in st.session_state:
         st.session_state.selected_place = None
     if 'place_details' not in st.session_state:
         st.session_state.place_details = None
+    if 'selected_hotel' not in st.session_state:
+        st.session_state.selected_hotel = None
+    if 'travel_dates' not in st.session_state:
+        st.session_state.travel_dates = None
+    if 'distance_matrix' not in st.session_state:
+        st.session_state.distance_matrix = None
+    if 'daily_routes' not in st.session_state:
+        st.session_state.daily_routes = None
 
 def get_place_suggestions(query):
     """Google Places Autocomplete API를 호출하여 장소 추천을 받아옵니다."""
@@ -112,6 +121,11 @@ def main():
                 min_value=start_date,
                 value=start_date + timedelta(days=2)
             )
+        if start_date and end_date:
+            st.session_state.travel_dates = [
+                start_date + timedelta(days=x)
+                for x in range((end_date - start_date).days + 1)
+            ]
         
         # 3. 예산 입력
         st.subheader("3. 예산을 입력해주세요")
@@ -153,9 +167,8 @@ def main():
         
         # 6. 호텔 검색
         st.subheader("6. 주변 호텔 검색")
-        show_hotels = st.checkbox("호텔 검색하기")
-        
-        if show_hotels:
+                
+        if st.button("호텔 검색하기", type="primary"):
             with st.spinner("호텔을 검색중입니다..."):
                 hotels = hotels_helper.search_hotels(
                     location=st.session_state.selected_place["location"]
@@ -175,7 +188,7 @@ def main():
                     with col1:
                         min_rating = st.slider("최소 평점", 3.5, 5.0, 3.5, 0.1)
                     with col2:
-                        min_reviews = st.slider("최소 리뷰 수", 100, 1000, 100, 50)
+                        min_reviews = st.slider("최소 리뷰 수", 0, 1000, 100, 50)
                     with col3:
                         max_price_level = st.slider("최대 가격 수준", 1, 4, 4, 1)
                     

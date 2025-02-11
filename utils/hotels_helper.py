@@ -115,7 +115,7 @@ class HotelsHelper:
                 
                 for place in data.get("results", []):
                     # 기본 필터링: 최소 리뷰 수와 평점 조건
-                    if (place.get("user_ratings_total", 0) < 100 or 
+                    if (place.get("user_ratings_total", 0) < 50 or 
                         place.get("rating", 0) < 3.5):
                         continue
                     
